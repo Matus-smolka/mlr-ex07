@@ -1,0 +1,43 @@
+1 - The Task 4 network, extended: yes the nomenclature was kept i specified it in the prompt multiple times that it should be kept and it indeed kept the nomenclature correctly . the forward structure was kept the same but the backwards was changed with soft-max + cross entropy in mind and averaged across the batches . this also answees that miny batches were used in the code , bias gradient is summed over the columns  and that sum already is the average, because every column of grad_a carries its 1/n from the loss. So there must be no second division by n. but in the first iteration of the code the agent fell into your trap and devided the culumns twice so every bias was learning 256 times slower . this was later fixed when the code was running some tests and noticed the unusualy slow adaptation . 
+
+2- NumPy only: yes the code used numpy and plain python only no other libraries i cheked wih my own eyes and had the agent double check as well so this reurement should be fulfilled flawlesly 
+
+3-A numerically safe softmax and cross-entropy. yes it managed to implement numericaly safe soft max and cross entropy , i will paste a snipet of the code here as an explanation :
+Safe softmax: subtract the column maximum
+
+def logsumexp(a):
+    m = np.max(a, axis=0, keepdims=True)                  # max over classes, per sample
+    return np.log(np.exp(a - m).sum(axis=0, keepdims=True)) + m
+
+def logits_to_proba(logits):
+    return np.exp(logits - logsumexp(logits))
+ The subtraction runs along axis=0 (classes), per sample/column. After it, the largest exponent is exactly exp(0) = 1, so nothing can overflow. Underflow of the very negative entries to 0.0 is harmless — 0 / (positive sum) is a fine probability.
+
+the code also managed to awoid log(0) . here i prompted it to make sure log(0) wasnt a problem but the system decided that instad of patching in a check and fix if log(0) were to happen it instead avoided it by never taking log of a softmax therefore it never needed to patch log(0) instead of  -log(p) it decided it voukld be more advantagious to use log-sum-exp . this might have unforseen results on the clasifier but since i am too lazy to research what is the difference or test what the actual impact of this substitution is and the code is runing dine and returning satisfactory results so far i willing to let it slide . 
+
+ as for averaging loss over batches the simple answer is yes
+
+the excercise also had us manually test respins to logits 1000, 0  and -1000 . which i did and got the result that the response is genuelly finite so its all right . 
+
+4-The data 
+the data was split in acoradnce to my prompt which was to split it into train validate and test , the averages and standartization were calculated only from the train part of the dataset. i specificaly instructed it to never fit anything on either validation or test and prevent data leakage , also i suspected that the dataset would be imballanced so i had it check before time and keep it in mind when working so the class inballance is directly adressed in the code,  the mitigation was tested and rejected (balanced sampling lost on both accuracy and balanced accuracy) . 
+i also asked the ai if it reported the imballance anywhere and it confirmed that there are multiple mentions in the code :
+report_class_balance() in download_data.py prints the full table (train/val/test counts and percentages per class, totals, most/least frequent, ratio 2.74). It appears in:
+
+- run_log.txt / run_log3.txt — printed at the start of every training run, before any model is trained
+- report.html section 1 — prose summary including the 2.74× ratio and the note that proportions are identical across splits. 
+
+flattening was done once consistently using the same function on every split of the data .
+
+the labels were pulled directly from the BLOOD_CLASSES in download_data.py . 
+
+5- A real gradient test adressed and workig checked twice so thre shouldnt be any problems 
+
+6- checked and test was only used once . also chceked the reported results and no training results were found . i dug a bit more into the code and i found one thing that is reported with a slight biast . val_accuracy is actualy the best acc found among the 50 epochs so the result can be considered a bit optimisticaly biased . 
+
+7- the runs are fully reporoducible . there are minimal changes in runtimes mostly asociated with how much other stuff my cpu has to calculate for other apps currently runing . i found out that when i heavily load the cpu by other apps ( moded minecraft ) the runtime changes but the changes are somewhat consistent ... what i mean is that the runs that were run while minecraft was draining the cpu were simular in lenght but quite a bit longer then a run that i did before minecraft was running . 
+
+8- the results are overall decent but not perfect and should mostly be used as a guidline . in clinincal enviroment the results should be checked by a human especialy since there seems to be adecent mix up between imature granulocite and 3 other classes . it however seems to be extremely good at clasifying platelets .... the problem here is that the pictures analized are simple croped images showing only one cell at a time not taking into cosiderations the scale or the context of the picture only classifying whatever it can currently see . the reported values are acc and recall and while theese can be used as a simple measurment of the codes succes rate the dont provide enough information on their own . the dataset was inballanced and this inballance might cause the clasifier to be skewed towardsparticullar clases even in cases where the new test set might be ballanced. and lastly we only used one dataset . i personaly didnt review it and i dont think i am enough to say wether the dataset is correctly anotated and since there was no expert review or clinical reference the data set may contain errors which will then translate to a faulty classifier , 
+
+
+

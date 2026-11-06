@@ -1,0 +1,59 @@
+bloodmnist.npz: already here, MD5 matches
+Class balance of BloodMNIST (training and validation splits)
+class                    train      %    val      %
+0 basophil                 852   7.1%    122   7.1%
+1 eosinophil              2181  18.2%    312  18.2%
+2 erythroblast            1085   9.1%    155   9.1%
+3 immature granulocyte    2026  16.9%    290  16.9%
+4 lymphocyte               849   7.1%    122   7.1%
+5 monocyte                 993   8.3%    143   8.4%
+6 neutrophil              2330  19.5%    333  19.5%
+7 platelet                1643  13.7%    235  13.7%
+totals: train 11959, val 1712   (test split: not read, see Splits.test)
+most frequent: neutrophil 2330 (19.5%)   least frequent: lymphocyte 849 (7.1%)
+ratio most/least frequent: 2.74
+
+seed = 0, batch = 256, smoke = False
+train 11959 images, val 1712 images, test held back (unread, 0 accesses so far)
+
+=== stage 0: the learning rate, on validation (8 epochs at [2352, 256, 8]) ===
+  adam eta=0.0003   val bal acc 0.8374
+  adam eta=0.001    val bal acc 0.8341
+  adam eta=0.003    val bal acc 0.8218
+  -> adam: eta = 0.0003
+  sgd eta=0.003    val bal acc 0.8111
+  sgd eta=0.01     val bal acc 0.8415
+  sgd eta=0.03     val bal acc 0.8467
+  -> sgd: eta = 0.03
+
+=== stage A: optimizer x sampling at [2352, 256, 8] ===
+
+  --- adam-plain: [2352, 256, 8]  adam eta=0.0003  plain  50 epochs ---
+  adam-plain: best at epoch 28  val acc 0.8762  val bal acc 0.8545  (172.63s)
+
+  --- adam-balanced: [2352, 256, 8]  adam eta=0.0003  balanced  50 epochs ---
+  adam-balanced: best at epoch 24  val acc 0.8750  val bal acc 0.8564  (184.9s)
+
+  --- sgd-plain: [2352, 256, 8]  sgd eta=0.03  plain  50 epochs ---
+  sgd-plain: best at epoch 18  val acc 0.8826  val bal acc 0.8589  (84.1s)
+
+  --- sgd-balanced: [2352, 256, 8]  sgd eta=0.03  balanced  50 epochs ---
+  sgd-balanced: best at epoch 11  val acc 0.8750  val bal acc 0.8568  (84.57s)
+
+stage A winner: optimizer=sgd, sampling=plain
+
+  --- softmax baseline: [2352, 8]  sgd eta=0.03  plain  50 epochs ---
+  softmax baseline: best at epoch 38  val acc 0.8189  val bal acc 0.7901  (50.46s)
+
+=== stage B: the sizes, with sgd / plain ===
+
+  --- [2352, 128, 8]: [2352, 128, 8]  sgd eta=0.03  plain  50 epochs ---
+  [2352, 128, 8]: best at epoch 31  val acc 0.8732  val bal acc 0.8524  (56.46s)
+
+  --- [2352, 256, 8]: [2352, 256, 8]  sgd eta=0.03  plain  50 epochs ---
+  [2352, 256, 8]: best at epoch 18  val acc 0.8826  val bal acc 0.8589  (80.85s)
+
+  --- [2352, 256, 128, 8]: [2352, 256, 128, 8]  sgd eta=0.03  plain  50 epochs ---
+  [2352, 256, 128, 8]: best at epoch 10  val acc 0.8791  val bal acc 0.8615  (87.36s)
+
+  --- [2352, 512, 256, 8]: [2352, 512, 256, 8]  sgd eta=0.03  plain  50 epochs ---

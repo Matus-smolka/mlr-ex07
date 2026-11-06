@@ -1,0 +1,19 @@
+{
+  "seed": 0,
+  "smoke": false,
+  "total_seconds": 482.15,
+  "per_model_seconds": {
+    "adam-plain": 61.34,
+    "adam-balanced": 62.36,
+    "sgd-plain": 36.91,
+    "sgd-balanced": 39.75,
+    "softmax baseline": 17.18,
+    "[2352, 128, 8]": 26.08,
+    "[2352, 256, 8]": 38.27,
+    "[2352, 256, 128, 8]": 40.26,
+    "[2352, 512, 256, 8]": 71.55,
+    "sgd-balanced @ chosen size": 39.2
+  },
+  "numpy": "2.3.5",
+  "threads": "8"
+}

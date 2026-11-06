@@ -1,0 +1,1270 @@
+cells: 64
+
+===== CELL 0 [markdown] chars=2544 =====
+# Exercise 7 — Neural network from scratch
+
+Today there is no library model to call. We build a neural network out of
+NumPy arrays: one neuron first, then a two-layer network whose
+**backpropagation you write out yourself**, exactly as the lecture on
+artificial neural networks derives it. We read the same network written with
+a loop over the layers, so that it can have any number of layers, and you
+turn your own script into PyTorch, checking that the numbers stay the same.
+Finally an agent grows the loop-based network into a deeper one that
+classifies microscope images of blood cells.
+
+## When to use AI agents
+
+- **Tasks 1–5: work without AI agents.** Write and understand the code yourself. Use the formulas, the step comments in every cell and teacher help.
+- **Task 6: use your coding agent.** Have it extend **the network from Task 4** into a deeper classifier, run the experiments and generate the report.
+- **Your review is your own work.** Check the agent's output and write `REVIEW.md` yourself; do not ask the agent to write it.
+
+| Task | Your output |
+| --- | --- |
+| 1. One neuron by hand | A forward pass and a gradient on paper, then in code |
+| 2. One neuron in NumPy | Your SGD loop, compared with the closed form; a numerical gradient |
+| 3. A two-layer network | One plain script: forward pass, loss, backward pass and update, one sample at a time |
+| 4. Any number of layers | A given script with a loop over the layers, read together — the same numbers for two layers |
+| 5. From your code to PyTorch | Autograd instead of your backward pass — the same numbers again |
+| 6. Agent extension | Your network, deeper, on blood-cell images — the compulsory hand-in |
+
+Everything follows the lecture notation. For one neuron
+
+$$a = \mathbf w^T \mathbf x + b, \qquad \hat y = f(a).$$
+
+**Write the code yourself.** Data generation, plotting and the checks are
+supplied; every cell you complete has short step comments. Where your code
+goes, the cell says `# TODO: your code here`, often followed by placeholder
+lines such as `L = np.nan  # PLACEHOLDER: replace` that only keep the notebook
+running — every such line is marked `# PLACEHOLDER` in its comment;
+**replace it with your own code**. Complete solutions are in the teacher
+version only. Start Task 6 in class and finish it at home, within **48 hours
+after your lab**.
+
+<p style="color: #c00000;"><strong>! Compulsory hand-in: complete and submit Task 6 within 48 hours after your lab. Attendance will not be credited unless you complete this requirement.</strong></p>
+===== CELL 1 [code] chars=69 =====
+%matplotlib inline
+import numpy as np
+import matplotlib.pyplot as plt
+===== CELL 2 [markdown] chars=1738 =====
+## Task 1 — One neuron by hand
+
+Doing it once by hand is the only way to see that backpropagation is
+nothing but the chain rule applied systematically.
+
+One neuron with two inputs and the squared-error loss. The bias is left out
+so that the arithmetic stays short — and it costs us nothing, because a bias
+is just a weight on a constant input $x_0 = 1$, as the lecture notes.
+
+$$\begin{array}{ll}
+\text{inputs} & \mathbf x = (x_1, x_2) = (1,\ 2) \\
+\text{weights} & \mathbf w = (w_1, w_2) = (0.5,\ -0.25) \\
+\text{inner potential} & a = w_1 x_1 + w_2 x_2 \\
+\text{prediction} & \hat y = f(a) = f(w_1 x_1 + w_2 x_2) \\
+\text{target} & y = 1 \\
+\text{loss} & L = \tfrac12 (\hat y - y)^2 = \tfrac12 \big(f(w_1 x_1 + w_2 x_2) - y\big)^2
+\end{array}$$
+
+First **derive the gradient** yourself, one weight at a time: differentiate
+$L$ with respect to $w_1$ and then with respect to $w_2$, with the chain rule
+through $\hat y$ and $a$. Keep the activation $f$ general — the result
+contains $f'(a)$, so it holds for both activations below.
+
+Then compute the numbers, in this order, and write them into the table below:
+
+1. the inner potential $a$ (the numbers are chosen so that it comes out nice);
+2. for the **linear** activation $f(a) = a$, $f'(a) = 1$: the prediction
+   $\hat y$, the loss $L$, and your two derivatives
+   $\partial L / \partial w_1$ and $\partial L / \partial w_2$;
+3. the same for the **sigmoid** activation
+   $f(a) = \sigma(a) = \dfrac{1}{1 + e^{-a}}$, whose derivative is
+   $f'(a) = f(a)\,\big(1 - f(a)\big)$.
+
+Finally, answer in one sentence: the input, the target and the loss function
+are the same in both columns, so **why** is the sigmoid gradient eight times
+smaller than the linear one? Compare the three factors.
+===== CELL 3 [markdown] chars=494 =====
+*Your derivation:*
+
+∂L/∂w₁ = ∂L/∂y_hat * ∂y_hat/∂f(a) * ∂f(a)/∂w1
+
+∂L/∂w₂ = ∂L/∂y_hat * ∂y_hat/∂f(a) * ∂f(a)/∂w2
+
+*Your numbers:*
+
+| quantity | linear | sigmoid |
+| --- | --- | --- |
+| a | &nbsp;0 | &nbsp;0.5 |
+| ŷ = f(a) | &nbsp;0 | &nbsp;0.5 |
+| L = ½ (ŷ − y)² | &nbsp;0.5 | &nbsp;0.25 |
+| ∂L/∂ŷ | &nbsp;-1 | &nbsp;-0.5 |
+| f′(a) | &nbsp;1 | &nbsp;0.25 |
+| ∂L/∂w₁ | &nbsp;-1 | &nbsp;-0.125 |
+| ∂L/∂w₂ | &nbsp;-2| &nbsp;-0.25|
+
+*Why is the sigmoid gradient eight times smaller (one sentence):*
+===== CELL 4 [markdown] chars=173 =====
+Now the same numbers in code. Nothing here is a library call — you are
+writing the formulas you have just used on the blackboard, and the printout
+must reproduce your paper.
+===== CELL 5 [code] chars=740 =====
+def sigmoid(a):
+    return 1.0 / (1.0 + np.exp(-a))
+
+
+x = np.array([1.0, 2.0])
+w = np.array([0.5, -0.25])
+y = 1.0
+
+# 1. The inner potential a.
+a = x @ w
+# 2. Linear neuron: the prediction, the loss and the gradient (y_hat_lin, loss_lin, grad_lin).
+y_hat_lin = a
+loss_lin = 0.5 * (y_hat_lin - y) ** 2
+grad_lin = (y_hat_lin - y) *1.0 * x
+# 3. Sigmoid neuron: the same three quantities with the sigmoid activation.
+y_hat_sig = sigmoid(a)
+loss_sig = 0.5 * (y_hat_sig - y) ** 2
+grad_sig = (y_hat_sig - y) * (y_hat_sig*(1-y_hat_sig)) * x
+
+print(f"a = {a}")
+print(f"linear : y_hat = {y_hat_lin:.4f}  L = {loss_lin:.4f}  grad = {np.round(grad_lin, 4)}")
+print(f"sigmoid: y_hat = {y_hat_sig:.4f}  L = {loss_sig:.4f}  grad = {np.round(grad_sig, 4)}")
+--- OUTPUTS (1) ---
+
+===== CELL 6 [markdown] chars=721 =====
+## Task 2 — One neuron in NumPy
+
+A neuron with a **linear** activation and one input is exactly the model
+$\hat y = w x + b$ — linear regression. That is a good thing: we know what the
+right answer is, so we can check whether gradient descent found it.
+
+With the loss $L = \tfrac12 (\hat y - y)^2 = \tfrac12 (w x + b - y)^2$ for a
+single sample, the chain rule gives
+
+$$\frac{dL}{dw} = (\hat y - y)\, x, \qquad \frac{dL}{db} = (\hat y - y),$$
+
+because $f'(a) = 1$ for the linear activation and $da/db = 1$. We use
+**stochastic gradient descent** (SGD): one sample, one update, and the order
+of the samples is reshuffled at the start of every epoch, as the lecture
+prescribes. One *epoch* is one pass over all 100 samples.
+===== CELL 7 [code] chars=226 =====
+np.random.seed(0)
+X_lin = 5 * np.random.rand(100)
+y_lin = X_lin * 0.5 + 2 + 0.4 * np.random.randn(100)
+
+plt.plot(X_lin, y_lin, ".")
+plt.xlabel("x")
+plt.ylabel("y")
+plt.title("100 samples from y = 0.5 x + 2 + noise")
+plt.show()
+--- OUTPUTS (1) ---
+
+===== CELL 8 [markdown] chars=463 =====
+**Write the whole training loop.** The starting point, the learning rate and
+the random generator are set; you write the epochs, the shuffling, the
+per-sample update and the record of the loss: the loss of every sample goes
+into a list as you go, and after each epoch the mean of that list is appended
+to the loss curve. Use the generator exactly as the
+step comments say — then your numbers match everybody else's: after 200
+epochs about $w = 0.495$, $b = 2.07$.
+===== CELL 9 [code] chars=993 =====
+w, b = 0.1, -0.1          # starting point, deliberately far from the answer
+eta = 0.001               # learning rate
+n_epochs = 200
+
+rng = np.random.default_rng(0)
+loss_curve = []           # the mean loss of every epoch
+
+# 1. Loop over n_epochs epochs; at the start of each, draw the order rng.permutation(len(X_lin)).
+for epoch in range(n_epochs):
+  sample_order = rng.permutation(len(X_lin))
+  # 2. For every index i in that order: the forward pass, the error and the loss of sample i;
+  epoch_losses = []
+  for i in sample_order:
+    x, y = X_lin[i], y_lin[i]
+    y_hat = w * x + b
+    error = (y_hat - y)
+    loss = 0.5 * error ** 2
+
+    #append the loss to a list of this epoch's losses.
+    epoch_losses.append(loss)
+    # 3. Update both parameters with the two derivatives above.
+    w -= eta * error * x
+    b -= eta * error
+
+# 4. After each epoch append the mean of this epoch's losses to loss_curve.
+  loss_curve.append(np.mean(epoch_losses))
+
+
+
+print(f"w = {w:.4f}, b = {b:.4f}")
+--- OUTPUTS (1) ---
+
+===== CELL 10 [markdown] chars=282 =====
+**Did it find the right answer?** For linear regression we do not have to
+guess: the minimum of the squared error has a closed form, and
+`np.linalg.lstsq` gives it in one line. This is the same habit as in the
+earlier labs — whenever a reference solution exists, compare against it.
+===== CELL 11 [code] chars=859 =====
+design = np.column_stack([X_lin, np.ones_like(X_lin)])
+w_exact, b_exact = np.linalg.lstsq(design, y_lin, rcond=None)[0]
+
+print(f"gradient descent : w = {w:.4f}, b = {b:.4f}")
+print(f"closed form      : w = {w_exact:.4f}, b = {b_exact:.4f}")
+y_hat = w * X_lin + b
+y_hat_exact = w_exact * X_lin + b_exact
+print(f"loss of our neuron  : {np.mean(0.5 * (y_hat - y_lin) ** 2):.6f}")
+print(f"loss of the optimum : {np.mean(0.5 * (y_hat_exact - y_lin) ** 2):.6f}")
+
+fig, axes = plt.subplots(1, 2, figsize=(11, 4))
+axes[0].plot(X_lin, y_lin, ".")
+grid = np.linspace(0, 5, 100)
+axes[0].plot(grid, w * grid + b, "r-", label=f"y = {w:.3f} x + {b:.3f}")
+axes[0].set_xlabel("x")
+axes[0].set_ylabel("y")
+axes[0].legend()
+axes[1].plot(loss_curve)
+axes[1].set_xlabel("epoch")
+axes[1].set_ylabel("mean loss in the epoch")
+axes[1].set_yscale("log")
+plt.tight_layout()
+plt.show()
+--- OUTPUTS (2) ---
+
+===== CELL 12 [markdown] chars=1289 =====
+The parameters are close but not identical, and the loss is a hair above the
+optimum. That is not a bug: SGD with a **constant** learning rate never comes
+to rest — every sample pulls the line a little in its own direction, so the
+parameters keep jittering in a small neighbourhood of the minimum. Decaying
+the learning rate is the standard fix (the lecture mentions it under SGD).
+
+### The numerical gradient
+
+The numerical gradient nudges **one** parameter by $\varepsilon$ up and down,
+keeps all the others fixed and measures the slope of the loss:
+
+$$\frac{dL}{dw} \approx \frac{L(w + \varepsilon) - L(w - \varepsilon)}{2\varepsilon}.$$
+
+It cannot train a network: every parameter costs two forward passes, so one
+step of a network with a million parameters would need two million forward
+passes instead of one forward and one backward pass. What it is for is a
+**check**: on a small network it is the referee of your analytic gradient —
+if the two disagree, the gradient is wrong, however nicely the loss goes down
+(the slides "Numerical gradient" of the lecture). The cell below is supplied:
+run it and read it. Here the loss is the **mean** over all 100 samples, so
+the analytic gradient is the mean of the per-sample gradients. In Task 3 the
+same check referees your backward pass.
+===== CELL 13 [code] chars=892 =====
+def total_loss(w, b):
+    y_hat = w * X_lin + b
+    return np.mean(0.5 * (y_hat - y_lin) ** 2)
+
+
+w_test, b_test = 0.3, 1.0
+
+# the analytic gradient of the mean loss: the mean of the per-sample gradients
+y_hat = w_test * X_lin + b_test
+error = y_hat - y_lin
+grad_w_analytic = np.mean(error * X_lin)
+grad_b_analytic = np.mean(error)
+
+# the numerical gradient: central differences, one parameter at a time
+eps = 1e-6
+grad_w_numeric = (total_loss(w_test + eps, b_test) - total_loss(w_test - eps, b_test)) / (2 * eps)
+grad_b_numeric = (total_loss(w_test, b_test + eps) - total_loss(w_test, b_test - eps)) / (2 * eps)
+
+print(f"dL/dw  analytic {grad_w_analytic: .8f}   numeric {grad_w_numeric: .8f}")
+print(f"dL/db  analytic {grad_b_analytic: .8f}   numeric {grad_b_numeric: .8f}")
+print(f"largest difference: {max(abs(grad_w_analytic - grad_w_numeric), abs(grad_b_analytic - grad_b_numeric)):.2e}")
+--- OUTPUTS (1) ---
+
+===== CELL 14 [markdown] chars=2559 =====
+## Task 3 — A two-layer network, written out as a script
+
+One neuron can only draw a straight line. To fit something curved we need a
+**hidden layer**: many neurons with a nonlinear activation, whose outputs are
+then combined by a single output neuron.
+
+The network of this task, in the notation of the lecture ($\mathbf h_0$ is
+the input, $\mathbf a_k$ the inner potentials of layer $k$, $\mathbf h_k$ its
+activations). The lecture hides the bias in $W_k$ as a weight on a constant
+input; here it is a separate array $\mathbf b_k$ — the same thing written out:
+
+$$\mathbf a_1 = W_1 \mathbf h_0 + \mathbf b_1, \qquad \mathbf h_1 = f(\mathbf a_1)
+  \quad (\text{ReLU}),$$
+$$\mathbf a_2 = W_2 \mathbf h_1 + \mathbf b_2, \qquad \hat{\mathbf y} = \mathbf a_2
+  \quad (\text{linear output, because this is regression}).$$
+
+Put together, the whole network and the loss of one sample $(x, y)$ are one
+equation, with $\mathbf h_0 = x$:
+
+$$\hat y = W_2\, f(W_1 x + \mathbf b_1) + b_2, \qquad
+  L = \tfrac12 \big(W_2\, f(W_1 x + \mathbf b_1) + b_2 - y\big)^2.$$
+
+The chain rule on this one expression gives all four gradients. The factor
+$\hat y - y$ from the outer square is in every one of them; $W_2$ and $b_2$
+sit outside the ReLU, $W_1$ and $\mathbf b_1$ inside it, so their gradients
+also pass back through $W_2$ and through $f'(\mathbf a_1)$:
+
+$$\frac{\partial L}{\partial W_2} = (\hat y - y)\, \mathbf h_1^T, \qquad
+  \frac{\partial L}{\partial b_2} = \hat y - y,$$
+$$\frac{\partial L}{\partial W_1} = \Big(W_2^T (\hat y - y) \odot f'(\mathbf a_1)\Big)\, x, \qquad
+  \frac{\partial L}{\partial \mathbf b_1} = W_2^T (\hat y - y) \odot f'(\mathbf a_1).$$
+
+Backpropagation computes exactly these, only it names the shared parts
+(`grad_a2`, `grad_h1`, `grad_a1` in 3a) so that each is computed once.
+
+We train with **stochastic gradient descent**, as in Task 2: one sample, one
+update. A sample is a **column vector**, as in the lecture — here a $1 \times 1$
+one, because the input is a single number. With $m$ hidden neurons:
+
+$$\begin{array}{l|l}
+\text{array} & \text{shape} \\ \hline
+\mathbf h_0 \ \text{(input)} & 1 \times 1 \\
+W_1,\ \mathbf b_1 & m \times 1,\ \ m \times 1 \\
+\mathbf a_1,\ \mathbf h_1 & m \times 1 \\
+W_2,\ \mathbf b_2 & 1 \times m,\ \ 1 \times 1 \\
+\hat{\mathbf y} & 1 \times 1
+\end{array}$$
+
+You write the whole network as **one plain script**: the forward pass, the
+loss, the backward pass and the update, line by line, with no functions. It
+is the most readable form of a neural network there is — every line is one
+formula of the lecture.
+===== CELL 15 [markdown] chars=199 =====
+The data are 150 noisy samples of $\sin x$; every tenth sample gets a large
+random offset added on top, so the set also contains outliers. It is a curve
+that a single neuron has no chance of fitting.
+===== CELL 16 [code] chars=273 =====
+np.random.seed(1)
+X = 5 * np.random.rand(150)
+Y = np.sin(X).ravel()
+Y[::10] += 3 * (0.5 - np.random.rand(15))
+Y = Y + 0.1 * np.random.randn(150)
+
+plt.plot(X, Y, "*")
+plt.xlabel("x")
+plt.ylabel("y")
+plt.title("150 samples: sin(x) + noise, every tenth an outlier")
+plt.show()
+--- OUTPUTS (1) ---
+
+===== CELL 17 [markdown] chars=616 =====
+The hidden layer uses ReLU; its derivative is what the backward pass needs:
+
+$$f(\alpha) = \max(0, \alpha), \qquad
+  f'(\alpha) = \begin{cases} 0 & \alpha < 0 \\ 1 & \alpha > 0 \end{cases}$$
+
+(At $\alpha = 0$ the derivative does not exist; we use $0$ and nobody minds.)
+In NumPy, ReLU is `np.maximum(a1, 0.0)` and its derivative is the mask
+`(a1 > 0)`.
+
+The four parameter arrays start as small random numbers: normally distributed
+with mean 0 and standard deviation 0.1, in the shapes of the table above. Draw
+them from the generator exactly as the step comments say, so that everybody
+starts from the same network.
+===== CELL 18 [code] chars=503 =====
+m = 128                    # hidden neurons
+gen = np.random.default_rng(0)
+
+# 1. Draw W1_start, b1_start, W2_start and b2_start, in this order, each with
+#    gen.normal(0.0, 0.1, shape) and the shape from the table (with m = 128).
+# TODO: your code here
+W1_start= gen.normal(0.0, 0.1, (m,1))
+b1_start= gen.normal(0.0, 0.1, (m,1))
+W2_start= gen.normal(0.0, 0.1, (1,m))
+b2_start= gen.normal(0.0, 0.1, (1,1))
+print("W1", W1_start.shape, " b1", b1_start.shape, " W2", W2_start.shape, " b2", b2_start.shape)
+--- OUTPUTS (1) ---
+
+===== CELL 19 [markdown] chars=1295 =====
+### 3a. One sample: forward, loss, backward
+
+The loss of one sample is $L = \tfrac12 (\hat y - y)^2$, so
+$\partial L / \partial \hat y = \hat y - y$. The backward pass runs from the
+last layer down; in the notation of the lecture
+
+$$\nabla_{\mathbf a_2} L = \hat{\mathbf y} - \mathbf y
+  \quad (\text{the output is linear, } f'(\mathbf a_2) = 1),$$
+$$\nabla_{W_2} L = \nabla_{\mathbf a_2} L \; \mathbf h_1^T, \qquad
+  \nabla_{\mathbf b_2} L = \nabla_{\mathbf a_2} L,$$
+$$\nabla_{\mathbf h_1} L = W_2^T \, \nabla_{\mathbf a_2} L, \qquad
+  \nabla_{\mathbf a_1} L = \nabla_{\mathbf h_1} L \odot f'(\mathbf a_1),$$
+$$\nabla_{W_1} L = \nabla_{\mathbf a_1} L \; \mathbf h_0^T, \qquad
+  \nabla_{\mathbf b_1} L = \nabla_{\mathbf a_1} L,$$
+
+where $\odot$ is the element-wise product (`*` in NumPy, while `@` is the
+matrix product). In the code, $\nabla_{\mathbf a_2} L$ is called `grad_a2`,
+$\nabla_{W_2} L$ is `grad_W2`, and so on.
+
+Before looping, get **one** step right. The first sample is given; compute, in
+this order: the forward pass, the loss, and the gradients of all four
+parameters. Write the shape of every array into a comment as you go —
+mistakes in backpropagation are almost always shape mistakes, and **the shape
+of a gradient always equals the shape of the thing it is a gradient of**.
+===== CELL 20 [code] chars=1089 =====
+W1, b1, W2, b2 = W1_start, b1_start, W2_start, b2_start
+
+h0 = X[0].reshape(1, 1)                        # (1, 1)
+y = Y[0].reshape(1, 1)                         # (1, 1)
+
+# 1. Forward pass: a1, h1 (ReLU) and a2; the prediction y_hat is a2 (linear output).
+# 2. The loss L of this sample, as a number (.item()).
+# 3. Output layer: grad_a2, then grad_W2 and grad_b2.
+# 4. Back through W2 to grad_h1, through the ReLU to grad_a1, then grad_W1 and grad_b1.
+# TODO: your code here
+a1 = W1 @ h0 + b1
+h1 = np.maximum(a1, 0.0)
+a2 = W2 @ h1 + b2
+y_hat = a2
+L = (0.5*(y_hat-y)**2).item()
+#back
+grad_a2 = y_hat - y
+grad_W2 = grad_a2 @ h1.T
+grad_b2 = grad_a2
+grad_a1 = W2.T @ grad_a2
+grad_h1 = grad_a1 * W2.T
+grad_W1 = grad_a1 @ h0.T
+grad_b1 = grad_a1
+
+
+print(f"loss of the first sample: {L:.6f}")
+for name, grad, param in [("W1", grad_W1, W1), ("b1", grad_b1, b1),
+                          ("W2", grad_W2, W2), ("b2", grad_b2, b2)]:
+    assert grad.shape == param.shape, f"the gradient of {name} has shape {grad.shape}, {name} has {param.shape}"
+print("every gradient has the shape of its parameter")
+--- OUTPUTS (1) ---
+
+===== CELL 21 [markdown] chars=325 =====
+**Check the backward pass before training with it.** A wrong gradient does
+not raise an error — it just trains badly. The supplied cell compares your
+gradients with the numerical gradient of Task 2 on all 385 parameters: around
+$10^{-10}$ is the accuracy of the finite difference itself; anything above
+$10^{-6}$ means a bug.
+===== CELL 22 [code] chars=1074 =====
+#@title Gradient check: your gradients against finite differences
+def loss_of(W1, b1, W2, b2):
+    # the loss of the first sample, for any values of the parameters
+    h0_check, y_check = X[0].reshape(1, 1), Y[0].reshape(1, 1)
+    return (0.5 * (W2 @ np.maximum(W1 @ h0_check + b1, 0.0) + b2 - y_check) ** 2).item()
+
+
+eps = 1e-6
+starting = [W1_start, b1_start, W2_start, b2_start]
+grads_3a = [grad_W1, grad_b1, grad_W2, grad_b2]   # your gradients of 3a
+largest = 0.0
+for k, name in enumerate(["W1", "b1", "W2", "b2"]):
+    for index in np.ndindex(starting[k].shape):
+        up = [p.copy() for p in starting]
+        down = [p.copy() for p in starting]
+        up[k][index] += eps
+        down[k][index] -= eps
+        numeric = (loss_of(*up) - loss_of(*down)) / (2 * eps)
+        largest = max(largest, abs(numeric - grads_3a[k][index]))
+    print(f"{name}: checked {starting[k].size} values")
+gradient_difference = float(largest) if np.all([np.all(np.isfinite(g)) for g in grads_3a]) else np.nan
+print(f"largest analytic-vs-numeric difference: {gradient_difference:.2e}")
+--- OUTPUTS (1) ---
+
+===== CELL 23 [markdown] chars=772 =====
+### 3b. The training loop
+
+Now put your lines from 3a into a loop. The two loops — over the epochs and
+over the samples in a shuffled order — are given. One **epoch** is one pass
+over all 150 samples, reshuffled at the start of every epoch. After each
+sample every parameter takes one step against its gradient,
+$W \leftarrow W - \eta \nabla_W L$, and the same for every $\mathbf b$.
+Append the loss of every sample to `epoch_losses` as you go; after each
+epoch the mean of that list goes into the loss curve, so that you can see
+the training progress.
+
+**Expected result** ($\eta = 0.01$, 100 epochs, the generator used exactly as
+given): a mean loss of about 0.218 in the first epoch and 0.057 in the last,
+against 0.290 for the constant model "always predict the mean".
+===== CELL 24 [code] chars=1633 =====
+W1, b1, W2, b2 = W1_start.copy(), b1_start.copy(), W2_start.copy(), b2_start.copy()   # the start of 3a
+eta = 0.01
+n_epochs = 100
+rng = np.random.default_rng(0)
+loss_curve_script = []                         # the mean loss of every epoch
+
+for epoch in range(n_epochs):
+    epoch_losses = []                          # the loss of every sample of this epoch
+    for i in rng.permutation(len(X)):          # a new order of the samples in every epoch
+        h0 = X[i].reshape(1, 1)                # the sample i, as in 3a
+        y = Y[i].reshape(1, 1)
+        # 1. Your forward pass and the loss from 3a; append the loss to epoch_losses.
+        # 2. Your backward pass from 3a, then update W1, b1, W2 and b2.
+        a1 = W1 @ h0 + b1
+        h1 = np.maximum(a1, 0.0)
+        a2 = W2 @ h1 + b2
+        y_hat = a2
+        L = (0.5*(y_hat-y)**2).item()
+        error = (y_hat - y)
+        epoch_losses.append(L)
+        #back
+        grad_a2 = y_hat - y
+        grad_W2 = grad_a2 @ h1.T
+        grad_b2 = grad_a2
+        grad_a1 = grad_h1 *(a1>0)
+        grad_h1 = grad_a1 * W2.T
+        grad_W1 = grad_a1 @ h0.T
+        grad_b1 = grad_a1
+        #update
+        W1 -= eta * grad_W1
+        b1 -= eta * grad_b1
+        W2 -= eta * grad_W2
+        b2 -= eta * grad_b2
+
+    loss_curve_script.append(np.mean(epoch_losses))
+
+
+loss_curve_script = np.array(loss_curve_script)
+baseline_loss = np.mean(0.5 * (Y - Y.mean()) ** 2)
+print(f"mean loss in epoch 1  : {loss_curve_script[0]:.4f}")
+print(f"mean loss in epoch {n_epochs}: {loss_curve_script[-1]:.4f}")
+print(f"loss of the constant model 'always predict the mean': {baseline_loss:.4f}")
+--- OUTPUTS (1) ---
+
+===== CELL 25 [code] chars=581 =====
+grid = np.linspace(X.min(), X.max(), 200).reshape(1, -1)
+fit = (W2 @ np.maximum(W1 @ grid + b1, 0.0) + b2).ravel()
+
+fig, axes = plt.subplots(1, 2, figsize=(11, 3.8))
+axes[0].plot(X, Y, "*", markersize=4)
+axes[0].plot(grid.ravel(), fit, "r-")
+axes[0].set_ylim(-2.6, 2.6)
+axes[0].set_xlabel("x")
+axes[0].set_ylabel("y")
+axes[0].set_title(f"the fit after {len(loss_curve_script)} epochs")
+axes[1].plot(loss_curve_script)
+axes[1].set_xlabel("epoch")
+axes[1].set_ylabel("mean loss in the epoch")
+axes[1].set_yscale("log")
+axes[1].set_title("training loss")
+plt.tight_layout()
+plt.show()
+--- OUTPUTS (1) ---
+
+===== CELL 26 [markdown] chars=2470 =====
+## Task 4 — A network with any number of layers
+
+Your Task 3 script knows exactly two layers: the names `W1`, `b1`, `W2`, `b2`
+are written into its lines. A deeper network does not need new mathematics —
+it repeats the same steps once more per layer: the forward recipe from the
+first layer to the last, the backward recipe from the last layer to the first
+(the slide "General neural net — each layer and NN learning" of the lecture,
+also on the exercise page). So instead of writing one more set of lines per
+layer, each recipe is written **once, inside a loop over the layers**.
+
+**This task is complete code — nothing to write.** We read it together: keep
+your Task 3 script next to it, every line inside the loops is one of your
+lines with `k` in place of the 1 and the 2. It is also the code the agent
+extends in Task 6.
+
+A network is described by the **list of its layer sizes**: `[1, 128, 1]` is
+the network of Task 3, `[1, 32, 32, 1]` a network with two hidden
+layers. It has $K$ = `len(sizes) - 1` layers, and layer $k$ ($k = 1, \dots, K$)
+has the arrays
+
+$$\begin{array}{l|l}
+\text{array} & \text{shape} \\ \hline
+W_k & \text{sizes}[k] \times \text{sizes}[k-1] \\
+\mathbf b_k & \text{sizes}[k] \times 1 \\
+\mathbf a_k,\ \mathbf h_k & \text{sizes}[k] \times 1
+\end{array}$$
+
+**Forward**, for $k = 1, \dots, K$, starting from the input $\mathbf h_0$:
+
+$$\mathbf a_k = W_k \mathbf h_{k-1} + \mathbf b_k, \qquad \mathbf h_k = f(\mathbf a_k),$$
+
+with ReLU in the hidden layers and the identity in the last layer, so the
+prediction is $\hat{\mathbf y} = \mathbf h_K = \mathbf a_K$.
+
+**Backward**, for $k = K, \dots, 1$, starting from
+$\nabla_{\mathbf a_K} L = \hat{\mathbf y} - \mathbf y$ (the output layer
+is linear):
+
+$$\nabla_{W_k} L = \nabla_{\mathbf a_k} L \; \mathbf h_{k-1}^T, \qquad
+  \nabla_{\mathbf b_k} L = \nabla_{\mathbf a_k} L,$$
+
+and, unless $k = 1$, the gradient is passed one layer down:
+
+$$\nabla_{\mathbf h_{k-1}} L = W_k^T \nabla_{\mathbf a_k} L, \qquad
+  \nabla_{\mathbf a_{k-1}} L = \nabla_{\mathbf h_{k-1}} L \odot f'(\mathbf a_{k-1}).$$
+
+**How the code stores it.** Python lists `W`, `b`, `a`, `h`, indexed by the
+**layer number of the lecture**: `W[k]`, `b[k]`, `a[k]` and `h[k]` belong to
+layer $k$, `h[0]` is the input and `h[K]` the prediction. `W[0]`, `b[0]` and
+`a[0]` are unused (`None`), only so that the indices in the code match the
+formulas. The loops run `for k in range(1, K + 1)` forward and
+`for k in range(K, 0, -1)` backward.
+===== CELL 27 [code] chars=2140 =====
+sizes = [1, 128, 1]                    # the layer sizes; [1, 128, 1] is the network of Task 3
+K = len(sizes) - 1                     # the number of layers
+eta = 0.01
+n_epochs = 100
+
+# the parameters W[k], b[k] of the layers k = 1..K (index 0 unused), drawn in the order of Task 3
+gen = np.random.default_rng(0)
+W = [None] * (K + 1)
+b = [None] * (K + 1)
+for k in range(1, K + 1):
+    W[k] = gen.normal(0.0, 0.1, (sizes[k], sizes[k - 1]))
+    b[k] = gen.normal(0.0, 0.1, (sizes[k], 1))
+
+rng = np.random.default_rng(0)
+loss_curve_layers = []                 # the mean loss of every epoch
+
+for epoch in range(n_epochs):
+    epoch_losses = []
+    for i in rng.permutation(len(X)):
+        a = [None] * (K + 1)
+        h = [None] * (K + 1)
+        h[0] = X[i].reshape(1, 1)      # the input
+        y = Y[i].reshape(1, 1)
+
+        # forward pass, from the first layer to the last
+        for k in range(1, K + 1):
+            a[k] = W[k] @ h[k - 1] + b[k]
+            if k < K:
+                h[k] = np.maximum(a[k], 0.0)   # ReLU in the hidden layers
+            else:
+                h[k] = a[k]                    # linear output layer
+        y_hat = h[K]
+        L = (0.5 * (y_hat - y) ** 2).item()
+        epoch_losses.append(L)
+
+        # backward pass, from the last layer to the first
+        grad_W = [None] * (K + 1)
+        grad_b = [None] * (K + 1)
+        grad_a = y_hat - y                     # the gradient of a[K]; the output layer is linear
+        for k in range(K, 0, -1):
+            grad_W[k] = grad_a @ h[k - 1].T
+            grad_b[k] = grad_a
+            if k > 1:
+                grad_h = W[k].T @ grad_a           # the gradient of h[k-1]
+                grad_a = grad_h * (a[k - 1] > 0)   # the gradient of a[k-1], through the ReLU of layer k-1
+
+        # update of every layer
+        for k in range(1, K + 1):
+            W[k] = W[k] - eta * grad_W[k]
+            b[k] = b[k] - eta * grad_b[k]
+
+    loss_curve_layers.append(np.mean(epoch_losses))
+
+loss_curve_layers = np.array(loss_curve_layers)
+print(f"{sizes}: mean loss in epoch 1 {loss_curve_layers[0]:.4f}, in epoch {n_epochs} {loss_curve_layers[-1]:.4f}")
+===== CELL 28 [markdown] chars=283 =====
+**The check:** with `sizes = [1, 128, 1]` the loop is exactly your Task 3
+network — the same starting weights and the same operations in the same
+order — so the loss curve must equal your script's (`loss_curve_script`)
+**bit for bit**. The cell below compares them and draws the fit.
+===== CELL 29 [code] chars=967 =====
+print(f"largest difference from the loss curve of your Task 3 script: "
+      f"{np.abs(loss_curve_layers - loss_curve_script).max():.2e}")
+
+# the prediction on a grid: the same forward loop, with 200 samples in the columns
+grid = np.linspace(X.min(), X.max(), 200).reshape(1, -1)
+h_grid = grid
+for k in range(1, K + 1):
+    a_grid = W[k] @ h_grid + b[k]
+    h_grid = np.maximum(a_grid, 0.0) if k < K else a_grid
+
+fig, axes = plt.subplots(1, 2, figsize=(11, 3.8))
+axes[0].plot(X, Y, "*", markersize=4, color="0.6")
+axes[0].plot(grid.ravel(), h_grid.ravel(), "r-", label=str(sizes))
+axes[0].set_ylim(-2.6, 2.6)
+axes[0].set_xlabel("x")
+axes[0].set_ylabel("y")
+axes[0].legend()
+axes[1].plot(loss_curve_script, label="Task 3: your script")
+axes[1].plot(loss_curve_layers, "--", label=f"Task 4: loop over the layers, {sizes}")
+axes[1].set_yscale("log")
+axes[1].set_xlabel("epoch")
+axes[1].set_ylabel("mean loss in the epoch")
+axes[1].legend()
+plt.tight_layout()
+plt.show()
+===== CELL 30 [markdown] chars=241 =====
+**Try it — a deeper network is one changed list.** Change the first line of
+the script to `sizes = [1, 32, 32, 1]` and run the two cells again (the
+comparison with Task 3 then no longer applies, of course). Is the deeper
+network better here?
+===== CELL 31 [markdown] chars=64 =====
+*Your answer: is the deeper network better here, and why (not)?*
+===== CELL 32 [markdown] chars=1534 =====
+## Task 5 — From your code to PyTorch
+
+Why a library at all, when NumPy already trained the network? For two main
+reasons:
+
+- **Automatic gradients (autograd).** You write only the forward pass and the
+  loss; PyTorch records the operations and computes every gradient for you.
+  The backward pass you wrote by hand in Task 3 — the part where the mistakes
+  happen — is no longer written for any network, however deep.
+- **Computing on a GPU.** The same code runs on a graphics card, which does
+  thousands of multiplications in parallel. Training a real network on images
+  takes minutes on a GPU instead of hours on a CPU; NumPy runs only on the CPU.
+
+Here you try the first one: replace your backward pass with autograd. The
+loss curve must stay the same — then you know exactly what the library does
+for you. We go back to the two-layer script of Task 3;
+autograd does not care how many layers there are.
+
+First a short tour of PyTorch: a few cells to run and read, nothing to write.
+
+### PyTorch in five minutes
+
+**Tensors and NumPy.** A `torch.Tensor` is PyTorch's array, created much like
+a NumPy array (`torch.randn`, `torch.zeros`, or `torch.tensor` from a list),
+with a `shape` and a `dtype`. The default floating-point type is `float32`,
+not NumPy's `float64`. `torch.from_numpy` shares memory with the array and
+keeps its `float64`; `torch.tensor(array)` makes a copy, `.numpy()` goes back
+and `.float()` converts to `float32`. In this lab we stay in `float64`, so
+that PyTorch and your NumPy code agree to the last digit.
+===== CELL 33 [code] chars=711 =====
+import torch
+
+torch.manual_seed(0)
+a = torch.randn(2, 3)                        # normally distributed numbers, like np.random.randn
+b = torch.tensor([[1.0, 2.0], [3.0, 4.0]])   # from a list
+print("a:", a.shape, a.dtype)
+print("b @ b.T =", b @ b.T)                  # @, *, .T and broadcasting work as in NumPy
+print("one number out of a tensor:", b[0, 1].item())
+
+x_np = np.linspace(0, 1, 4)
+x_shared = torch.from_numpy(x_np)   # shares memory with x_np
+x_copy = torch.tensor(x_np)         # an independent copy
+print("dtypes:", x_shared.dtype, x_copy.dtype, "  after .float():", x_shared.float().dtype)
+x_np[0] = 100.0
+print("after changing the array: shared", x_shared[0].item(), "  copy", x_copy[0].item())
+--- OUTPUTS (1) ---
+
+===== CELL 34 [markdown] chars=499 =====
+**A gradient with autograd.** A tensor created with `requires_grad=True`
+records every operation done with it. Reduce the result to a single number —
+a scalar loss — and `loss.backward()` stores the derivative of the loss with
+respect to the tensor in its `.grad`. Below, the loss is $\sum_i w_i^2$, so
+the gradient must be $2 w_i$. `backward()` *adds* to `.grad`: a second
+`backward()` doubles it, which is why a training loop sets every `.grad` back
+to zero with `.grad.zero_()` after each update.
+===== CELL 35 [code] chars=367 =====
+w = torch.tensor([1.0, -2.0, 3.0], requires_grad=True)
+loss = torch.sum(w ** 2)    # backward() needs a single number
+loss.backward()
+print("w.grad =", w.grad)
+loss = torch.sum(w ** 2)    # backward() frees the record, so the loss is computed again
+loss.backward()
+print("after a second backward():", w.grad)
+w.grad.zero_()
+print("after zero_():            ", w.grad)
+--- OUTPUTS (1) ---
+
+===== CELL 36 [markdown] chars=446 =====
+**Switching the recording off, and the device.** Inside `with torch.no_grad():`
+nothing is recorded — used for the parameter update and for evaluation.
+`.detach()` returns the same numbers cut out of the record, needed before
+`.numpy()`. A tensor lives in RAM (`cpu`) or on a GPU (`cuda`); an operation
+needs all its inputs in the same place, `.to(device)` moves a tensor there and
+`.cpu()` brings a result back. Today everything runs on the CPU.
+===== CELL 37 [code] chars=388 =====
+print("w * 5                 : requires_grad =", (w * 5).requires_grad)
+with torch.no_grad():
+    print("w * 5 inside no_grad(): requires_grad =", (w * 5).requires_grad)
+print("as a NumPy array:", w.detach().numpy())
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+v = torch.ones(2, 2).to(device)
+total = (v * 5).sum()
+print(total.device, "->", total.cpu().numpy())
+===== CELL 38 [markdown] chars=1032 =====
+### Training with autograd
+
+Now train the network of Task 3 with autograd in place of your backward pass.
+The four parameters are tensors that record their gradients (given); after
+`L.backward()` the gradients sit in `W1.grad`, `b1.grad`, `W2.grad` and
+`b2.grad` — nobody had to write the backward pass. The loops are those of 3b
+and are given; you write the lines inside: your forward pass of 3a with
+tensors (`torch.relu` in place of `np.maximum`), the loss as a single number
+(`torch.sum`), `backward()` and the update. Two rules from the tour above
+enter the loop:
+
+- the **update must not be recorded** — it is not part of the network — so it
+  runs inside `with torch.no_grad():`, and it changes the tensor in place
+  (`-=`), so that the same tensor, with its `requires_grad`, stays in use;
+- `backward()` **adds** to `.grad`, it does not overwrite it, so after the
+  update every `.grad` is set back to zero with `.grad.zero_()`.
+
+**Expected result:** the same loss curve as your script in Task 3 — the plot
+below shows both.
+===== CELL 39 [code] chars=1506 =====
+W1 = torch.tensor(W1_start, requires_grad=True)   # the same start as in Task 3
+b1 = torch.tensor(b1_start, requires_grad=True)
+W2 = torch.tensor(W2_start, requires_grad=True)
+b2 = torch.tensor(b2_start, requires_grad=True)
+eta = 0.01
+n_epochs = 100
+rng = np.random.default_rng(0)
+loss_curve_autograd = []
+
+for epoch in range(n_epochs):
+    epoch_losses = []
+    for i in rng.permutation(len(X)):
+        h0 = torch.tensor(X[i].reshape(1, 1))
+        y = torch.tensor(Y[i].reshape(1, 1))
+        # 1. Your forward pass with tensors and the loss L; append L.item() to epoch_losses.
+        a1= W1@ h0 + b1
+        h1= torch.relu(a1)
+        a2 = W2@ h1 + b2
+        y_hat = a2
+        L = torch.sum(0.5*(y_hat-y)**2)
+        epoch_losses.append(L.item())
+        # 2. backward() on L.
+        # 3. Inside torch.no_grad(): update W1, b1, W2 and b2 in place (-=), then zero every .grad.
+        # TODO: your code here
+        epoch_losses.append(np.nan)  # PLACEHOLDER: replace
+    loss_curve_autograd.append(np.mean(epoch_losses))
+
+loss_curve_autograd = np.array(loss_curve_autograd)
+print(f"largest difference from the loss curve of your Task 3 script: "
+      f"{np.abs(loss_curve_autograd - loss_curve_script).max():.2e}")
+
+plt.plot(loss_curve_script, label="Task 3: your script")
+plt.plot(loss_curve_autograd, "--", label="Task 5: autograd")
+plt.yscale("log")
+plt.xlabel("epoch")
+plt.ylabel("mean loss in the epoch")
+plt.title("the same network, two ways to compute the gradient")
+plt.legend()
+plt.show()
+--- OUTPUTS (2) ---
+
+===== CELL 40 [markdown] chars=1633 =====
+## Task 6 — Your network, deeper, on blood-cell images (compulsory, with an agent)
+
+<p style="color: #c00000;"><strong>! Compulsory hand-in: complete and submit Task 6 within 48 hours after your lab. Attendance will not be credited unless you complete this requirement.</strong></p>
+
+**The practical problem.** A complete blood count with a *differential* tells
+a physician how many cells of each type are in a patient's blood. Analysers
+photograph single cells from a peripheral blood smear, and a laboratory
+technician still checks many of them under the microscope. A classifier that
+pre-sorts the cells into types, so that the technician only reviews the
+uncertain ones, saves real work. You will build the core of such a classifier
+from the **NumPy network of Task 4**.
+
+**The data: BloodMNIST** (MedMNIST v2, licence CC BY 4.0) — 17,092 microscope
+images of individual normal blood cells from the Hospital Clinic of Barcelona
+(Acevedo et al., 2020), centre-cropped and downsampled to 28 × 28 RGB pixels,
+in **eight classes**: basophil, eosinophil, erythroblast, immature granulocyte,
+lymphocyte, monocyte, neutrophil and platelet. The classes are **not
+balanced** (from 849 to 2,330 training images). The official split is 11,959
+training, 1,712 validation and 3,421 test images; one file of 35 MB:
+`https://zenodo.org/records/10519652/files/bloodmnist.npz?download=1`, MD5
+`7053d0359d879ad8a5505303e11de1dc`.
+
+The notebook previews four training images of every class (a 66 kB sample,
+not the whole file). Some classes are easy to tell apart by eye, others much less
+so — and the network sees each image only as 2,352 numbers.
+===== CELL 41 [code] chars=916 =====
+import io
+import urllib.request
+
+BLOOD_CLASSES = ["basophil", "eosinophil", "erythroblast", "immature granulocyte",
+                 "lymphocyte", "monocyte", "neutrophil", "platelet"]
+url = "https://raw.githubusercontent.com/tomasvicar/MLR-public/master/exercises/data/ex07_bloodmnist_sample.npz"
+with urllib.request.urlopen(url) as response:
+    sample = np.load(io.BytesIO(response.read()))
+images, labels = sample["images"], sample["labels"]
+print("images:", images.shape, images.dtype, "  labels:", labels.shape)
+
+fig, axes = plt.subplots(4, 8, figsize=(12, 6.5))
+for k, name in enumerate(BLOOD_CLASSES):
+    for row, index in enumerate(np.flatnonzero(labels == k)[:4]):
+        axes[row, k].imshow(images[index])
+        axes[row, k].axis("off")
+    axes[0, k].set_title(name.replace(" ", "\n"), fontsize=10)
+plt.suptitle("BloodMNIST: four training images per class, 28 × 28 RGB")
+plt.tight_layout()
+plt.show()
+--- OUTPUTS (2) ---
+
+===== CELL 42 [markdown] chars=5610 =====
+### The goal and what is graded
+
+**The goal:** extend the Task 4 network into a classifier of the eight cell
+types, compare a few network sizes on the validation split against a softmax
+baseline, evaluate the chosen network once on the test split, and write a
+short report. Against Task 4, the input has 28 · 28 · 3 = 2,352 numbers
+instead of one, the hidden layers are wider, and the output has eight
+neurons with a **softmax** and the **cross-entropy** loss from the lecture.
+The backward pass stays your loop over the layers. A network of a few
+hundred thousand parameters still trains on a laptop CPU in minutes.
+
+**Writing the instructions for the agent is your job.** There is no
+ready-made prompt. Turn the goal and the requirements below into your own
+instructions — what to build, in what order, how to check it — and refine
+them as you see what the agent does. A good habit: ask for the gradient test
+and a quick run on a small part of the data before the full comparison.
+
+**Requirements, and how you check each one in `REVIEW.md`:**
+
+1. **The Task 4 network, extended:** the network code starts from the Task 4
+   script and keeps its conventions (one sample per column, the lists
+   `W[k]`, `b[k]`, the loops over the layers, the backward formulas of the
+   lecture). → Compare the forward and backward pass in `nn_numpy.py` with
+   the Task 4 code: are the conventions still there? If it trains on
+   mini-batches (several samples as columns), is the bias gradient summed and
+   the loss averaged over the batch?
+2. **NumPy only** for the network, the training and the optimizer (for
+   example Adam from the lecture): no PyTorch, TensorFlow, JAX, autograd
+   library or scikit-learn model; scikit-learn may only cross-check a metric.
+   → Search every file the agent wrote for `torch`, `tensorflow`, `jax`,
+   `autograd`, `sklearn` (your own notebook may use PyTorch in Task 5). Is the
+   backward pass really computed in `nn_numpy.py`?
+3. **A numerically safe softmax and cross-entropy.** → Is the maximum
+   subtracted, is there a `log(0)` risk, is the loss averaged over the batch?
+   Feed it the logits (1000, 0, −1000) yourself: the loss must be finite.
+4. **The data** are downloaded by a script from the URL above, the MD5 is
+   checked, the file is never committed; the official split; standardization
+   from the training images only. → Where are the standardization statistics
+   computed? Are the images flattened consistently, the labels 0–7 named
+   correctly, the class balance reported?
+5. **A real gradient test** (`test_gradients.py`, runnable with `pytest`): a
+   tiny `float64` network, every analytic gradient, biases included, against a
+   central difference with a strict threshold, and a demonstration that it
+   fails for a deliberately broken backward pass. → Run it yourself. A check
+   that cannot fail checks nothing.
+6. **Validation for every choice, test once:** the network size and the epoch
+   are chosen on validation; then the test split is used once, for the chosen
+   network, the softmax baseline (no hidden layer) and the majority-class
+   rule, with accuracy, balanced accuracy, per-class recall and a confusion
+   matrix. → Find every use of the test images. Was everything chosen before
+   the test set was opened? Is no training accuracy reported as a result?
+7. **Reproducible:** fixed seeds, a README with the commands from a fresh
+   clone, the measured runtime, and a second run that gives the same
+   `results.csv` (or a reported and explained difference). → Inspect the
+   seeds, rerun yourself, compare the two `results.csv`, record the command
+   and your runtime.
+8. **Cautious conclusions** in the report. → Do the learning curves support
+   them? How much better than the softmax baseline and the majority rule is
+   the network? Which classes are confused? What can this result not
+   establish about clinical use?
+
+For each point record in `REVIEW.md` the location (file/line or notebook
+cell), what you checked, your finding and how any problem was fixed. "No
+problem found" needs evidence too.
+
+**Required files:** `ex07_notebook.ipynb`, `nn_numpy.py`, `download_data.py`,
+`train.py`, `test_gradients.py`, `pyproject.toml`, `uv.lock`, `README.md`,
+`results.csv` (one row per compared model with its validation accuracy and
+balanced accuracy), `test_metrics.json`, `runtime.json`,
+`learning_curves.png`, `confusion_matrix.png`, a self-contained `report.html`
+and your own `REVIEW.md`. Do not let the agent write `REVIEW.md`.
+
+**In class:** create the repository, invite the teacher, write your first
+instructions, and get the gradient test and a short trial run going. **At
+home:** the full run, your own review and the hand-in. The setup (your own
+notebook in the ZIP folder, the private repository `mlr-ex07`, the invitation
+of **MLRteacher**) is described on the exercise page and in the ZIP's
+`README.md`.
+
+Submit by pushing within **48 hours after the end of your lab**. What is pushed
+before the deadline counts. Hand-ins are reviewed automatically by AI.
+
+<p style="color: #c00000;"><strong>! Plagiarism check: all hand-ins will be checked for plagiarism.</strong></p>
+
+Without a working agent, meet the same requirements yourself at home.
+*Optional after the required run:* L2 weight decay or dropout from the
+lecture, chosen on validation only.
+
+**What to expect:** the softmax baseline reaches roughly 0.8 validation
+accuracy and a NumPy network with hidden layers clearly more; the whole
+comparison takes minutes, not hours, on a laptop CPU. Much better or much
+worse results deserve an investigation, not automatic acceptance.
+===== CELL 43 [markdown] chars=1244 =====
+## Summary
+
+* A neuron is $\hat y = f(\mathbf w^T \mathbf x + b)$; its gradient always
+  splits into loss $\times$ activation $\times$ input.
+* Backpropagation is the chain rule written once per layer:
+  $\nabla_{\mathbf a_k} L = \nabla_{\mathbf h_k} L \odot f'(\mathbf a_k)$,
+  $\nabla_{\mathbf h_{k-1}} L = W_k^T \nabla_{\mathbf a_k} L$,
+  $\nabla_{W_k} L = \nabla_{\mathbf a_k} L\, \mathbf h_{k-1}^T$.
+* The shape of a gradient equals the shape of what it is a gradient of. Use
+  that as your first check, and the **numerical gradient** as your second.
+* A refactoring, or a switch to a library, is checked by **getting the same
+  numbers**: your script, the loop over the layers and autograd gave the same
+  loss curve. `loss.backward()` computes what you wrote in Task 3.
+* A network of any depth is the same recipe in two loops over the layers:
+  forward from the first layer to the last, backward from the last to the
+  first. With two layers the loop gives exactly your script; a deeper network
+  is just a longer list of sizes.
+
+Next time we continue in **PyTorch** from exactly this point: what autograd
+records, what optimizers such as Adam keep in memory, `nn.Module` for networks of any size, and a
+convolutional network on images.
+===== CELL 44 [markdown] chars=1403 =====
+## Task 6 — my network, deeper, on blood-cell images
+
+Everything below is the **Task 4 script extended**, not a new network: the lists
+`W[k]`, `b[k]` indexed by the layer number of the lecture, one sample per
+column, `for k in range(1, K + 1)` forward and `for k in range(K, 0, -1)`
+backward, ReLU in the hidden layers and the identity in the last one. Three
+things change against Task 4:
+
+| | Task 4 | Task 6 |
+| --- | --- | --- |
+| input | 1 number | 28 · 28 · 3 = 2,352 numbers |
+| output | 1 neuron, squared error | 8 neurons, **softmax + cross-entropy** |
+| layers | `[1, 128, 1]` | e.g. `[2352, 512, 256, 8]` |
+
+The only line of the backward pass that had to change is its starting point:
+Task 4 began with `grad_a = y_hat - y`, the softmax with cross-entropy begins
+with `grad_a = (p - onehot) / N`. The loop under it is Task 4's loop, and with a
+batch the bias gradient is **summed** over the columns while the loss is
+**averaged** over them.
+
+NumPy and plain Python throughout — no PyTorch, TensorFlow, JAX, autograd or
+scikit-learn in the forward pass or the backward pass. matplotlib appears only
+in the two figures.
+
+**The files.** `nn_numpy.py` (network, softmax/cross-entropy, backward, Adam),
+`download_data.py` (download + MD5 + the official split + standardization),
+`train.py` (the comparison and the single test pass), `test_gradients.py`
+(`pytest`), `make_report.py` (`report.html`).
+===== CELL 45 [markdown] chars=347 =====
+### Getting the files in Colab
+
+The four modules have to sit next to the notebook (that is how the ZIP folder is
+laid out). Either upload them with the file manager on the left, or uncomment
+the line below and fill in your repository. The 35 MB `bloodmnist.npz` is
+deliberately **not** committed — `download_data.py` fetches it and checks its
+MD5.
+===== CELL 46 [code] chars=622 =====
+# Uncomment for Colab, then run:
+# from google.colab import drive
+# drive.mount('/content/drive')
+# %cd /content/drive/MyDrive/mlr-ex07
+
+# !git clone https://github.com/<your-user>/mlr-ex07.git && %cd mlr-ex07
+
+import os, sys
+sys.path.append(os.getcwd())          # so `import nn_numpy` works from the notebook
+!ls *.py
+!python --version && python -c "import numpy; print('numpy', numpy.__version__)"
+!grep -rn -E "import (torch|tensorflow|jax|sklearn|autograd)|from (torch|tensorflow|jax|sklearn|autograd)" nn_numpy.py train.py download_data.py || echo "no forbidden library in the network, the training or the optimizer"
+===== CELL 47 [markdown] chars=550 =====
+### 6a. The data, and how its classes are spread
+
+The official split is used as it is. The one thing to look at before training is
+the class balance — a classifier that sees 98% of its samples in one class is a
+different problem from this one.
+
+`download_data.py` checks the MD5 `7053d0359d879ad8a5505303e11de1dc` of the
+file, then `load_splits()` standardizes with statistics computed **on the
+training images only**. Note that `test` is a *method*, `data.test()`, not an
+array: opening the test split is an action you can see in the code and count.
+===== CELL 48 [code] chars=499 =====
+import numpy as np
+import nn_numpy as nn
+from download_data import load_splits, report_class_balance, BLOOD_CLASSES, N_CLASSES
+
+data = load_splits()
+print(report_class_balance(data))
+
+print()
+print("one sample per column:", data.train.shape, "= 2352 numbers x", data.train.shape[1], "images")
+print("train standardized  : mean %.3f std %.3f" % (data.train.mean(), data.train.std()))
+print("val on the same scale: mean %.3f std %.3f  (never used to compute them)" % (data.val.mean(), data.val.std()))
+===== CELL 49 [markdown] chars=660 =====
+**What the balance says.** The largest class is 19.5% of the training images and
+the smallest 7.1% — a ratio of 2.74, and the same proportions in all three
+splits. That is uneven, but it is nowhere near the case of one class holding the
+overwhelming majority of the samples, so it does not by itself demand a
+mitigation. Instead of assuming one, task 6c **tests** one on the validation
+split: the same network trained with class-balanced sampling, where every batch
+draws its class uniformly instead of in the natural proportions.
+
+*Your note: did balanced sampling help, and what does that tell you? (This goes
+in your `REVIEW.md`, which you write yourself.)*
+===== CELL 50 [markdown] chars=1008 =====
+### 6b. The softmax and the cross-entropy, checked before they are trained with
+
+Two things to verify here, both in the style of the gradient check of Task 2 and
+Task 3.
+
+First, **numerical safety**. A naive `exp(logits) / sum(exp(logits))` overflows
+as soon as a logit is large, and `log(0)` is a real risk in the loss. Subtracting
+the column maximum keeps the largest exponent at `exp(0) = 1`, and computing the
+loss through log-sum-exp means the logarithm is taken of a sum that is at least
+1 — never of 0. The task sheet's own test is the logits `(1000, 0, -1000)`.
+
+Second, the **gradient of the loss itself**, against a central difference. This
+check earned its place: written the obvious way,
+`np.sum(logsumexp - y * logits)`, the loss adds `logsumexp` once per *class*
+instead of once per *sample*, inflating it about eightfold. The gradient is
+unaffected, so the network trains and the loss curve is simply wrong. An
+all-`-1000` logit vector exposing a *negative* cross-entropy is what gave it
+away.
+===== CELL 51 [code] chars=1379 =====
+# 1. The extreme logits from the task sheet. The loss must be finite, and a
+#    cross-entropy cannot be negative.
+for row in ([1000.0, 0.0, -1000.0], [1000.0, 1000.0, 1000.0],
+            [-1000.0, -1000.0, -1000.0], [1e300, 0.0, -1e300]):
+    logits = np.array(row).reshape(-1, 1)
+    line = []
+    for target in range(3):
+        y = np.zeros((3, 1)); y[target, 0] = 1.0
+        loss, grad = nn.softmax_crossentropy(logits, y)
+        assert np.isfinite(loss) and np.all(np.isfinite(grad)), "not finite!"
+        assert loss >= -1e-12, "a cross-entropy cannot be negative"
+        line.append(f"class {target}: {loss:8.4f}")
+    print(f"logits {str(row):<28}  " + "   ".join(line))
+
+# 2. Equal logits must give exactly log(n_classes): -log(1/8).
+uniform = nn.softmax_crossentropy(np.zeros((8, 4)), nn.one_hot(np.arange(4), 8))[0]
+print(f"\nuniform logits -> loss {uniform:.6f}, log(8) = {np.log(8):.6f}")
+
+# 3. The safe log-sum-exp route against the textbook -log p.
+gen = np.random.default_rng(0)
+logits = gen.standard_normal((N_CLASSES, 200)) * 8.0
+targets = gen.integers(0, N_CLASSES, 200)
+Y = nn.one_hot(targets, N_CLASSES)
+p = nn.softmax(logits)
+reference = -np.mean(np.log(p[targets, np.arange(200)]))
+mine, grad_a = nn.softmax_crossentropy(logits, Y)
+print(f"log-sum-exp loss {mine:.8f}   -log p loss {reference:.8f}   "
+      f"difference {abs(mine - reference):.2e}")
+===== CELL 52 [markdown] chars=688 =====
+### 6c. The gradient test: every analytic gradient against a central difference
+
+The same referee as in Task 2 and Task 3, now on a network with the
+softmax-and-cross-entropy output and three layers, so that the gradient has to be
+passed down through two hidden layers. Weights and biases of every layer, all of
+them, `float64`, at a threshold far tighter than training would tolerate.
+
+Run the whole thing from a terminal with `pytest -q test_gradients.py`. Note the
+last two tests: a **deliberately broken** backward pass must *fail* the same
+comparison. A check that cannot fail checks nothing — the missing ReLU mask below
+is caught at about `1e7`, against `1e-7` for the correct one.
+===== CELL 53 [code] chars=752 =====
+!pytest -q test_gradients.py
+
+# and the same check in the open, on a tiny network:
+from test_gradients import tiny_problem, analytic, numeric, largest_relative_difference
+W, b, X, Y = tiny_problem()
+_, gW_a, gb_a = analytic(W, b, X, Y)
+gW_n, gb_n = numeric(W, b, X, Y)
+worst, where = largest_relative_difference(gW_a, gb_a, gW_n, gb_n)
+n_checked = sum(w.size for w in W[1:]) + sum(v.size for v in b[1:])
+print(f"\nnotebook version: {n_checked} parameters, largest relative difference {worst:.2e} (at {where})")
+
+# the gradient of a[k] always has the shape of a[k], and grad of W[k] the shape of W[k]
+for k in range(1, len(W)):
+    assert gW_a[k].shape == W[k].shape and gb_a[k].shape == b[k].shape
+print("every gradient has the shape of its parameter")
+===== CELL 54 [markdown] chars=301 =====
+### 6d. A trial run before the full comparison
+
+One network, a few epochs, to see the loss fall and the validation accuracy
+climb before spending time on the comparison. This is the Task 4 loop with the
+columns of a batch instead of one sample; the update is Adam, written out in
+`nn_numpy.adam_step`.
+===== CELL 55 [code] chars=527 =====
+import time
+from train import train_one, evaluate
+
+sizes = [2352, 256, 8]
+t0 = time.perf_counter()
+out = train_one(sizes, data, optimizer="adam", eta=1e-3, epochs=5,
+                label="trial 2352-256-8")
+print(f"\n{out['row']['params']:,} parameters, {time.perf_counter() - t0:.1f} s")
+print(f"best epoch {out['best_epoch']}: val accuracy {out['row']['val_accuracy']:.4f}, "
+      f"val balanced accuracy {out['row']['val_balanced_accuracy']:.4f}")
+print("the test split has been opened", data.test_reads, "time(s) so far")
+===== CELL 56 [markdown] chars=876 =====
+### 6e. The comparison, and the one look at the test split
+
+`train.py` does the comparison in the order the task asks for, each choice made
+on validation:
+
+0. the **learning rate** of each optimizer, over a short probe;
+1. the **optimizer** (`adam` / `sgd`) and the **sampling** (`plain` /
+   `balanced`), at one middle size;
+2. the **layer sizes**, with the winning configuration, against the **softmax
+   baseline** `[2352, 8]` (no hidden layer);
+3. the **sampling confirmed** again at the size that won, so the decision does
+   not rest on one architecture;
+4. only then `data.test()` — once — for the chosen network, the softmax baseline
+   and the majority-class rule.
+
+Everything is ranked by `selection_key`: validation accuracy in
+half-percentage-point bands, balanced accuracy breaking ties. Run it from a
+terminal (`py train.py`, about 25 minutes) or the line below.
+===== CELL 57 [code] chars=144 =====
+# The full comparison. ~25 minutes on a laptop CPU; --smoke is the two-minute version.
+# !python train.py --epochs 50
+# !python train.py --smoke
+===== CELL 58 [code] chars=1029 =====
+import csv, json
+# results.csv holds only what two identical runs reproduce exactly; the measured
+# seconds are in runtime.json, so wall-clock never breaks a `diff` of results.csv.
+cols = ["label", "params", "optimizer", "sampling", "best_epoch",
+        "val_accuracy", "val_balanced_accuracy"]
+seconds = json.load(open("runtime.json")).get("per_model_seconds", {})
+with open("results.csv", encoding="utf-8") as f:
+    rows = list(csv.DictReader(f))
+print(f"{'model':<26}{'parameters':>11}{'optimizer':>10}{'sampling':>10}"
+      f"{'epoch':>7}{'val acc':>10}{'val bal acc':>13}{'seconds':>9}")
+for r in rows:
+    print(f"{r['label']:<26}{int(r['params']):>11,}{r['optimizer']:>10}{r['sampling']:>10}"
+          f"{r['best_epoch']:>7}{float(r['val_accuracy']):>10.4f}"
+          f"{float(r['val_balanced_accuracy']):>13.4f}"
+          f"{float(seconds.get(r['label'], float('nan'))):>9.1f}")
+print(f"\n{len(rows)} models compared on validation; the test columns are empty for all "
+      f"but the three evaluated at the end.")
+
+===== CELL 59 [markdown] chars=184 =====
+The two figures. In the learning curves, the **left panel is the training loss and
+is not a result** — it is there to document the runs. The epoch was taken from
+the validation panels.
+===== CELL 60 [code] chars=62 =====
+from IPython.display import Image
+Image("learning_curves.png")
+===== CELL 61 [code] chars=29 =====
+Image("confusion_matrix.png")
+===== CELL 62 [code] chars=553 =====
+import json
+m = json.load(open("test_metrics.json"))
+print("chosen on validation:", m["selected_on_validation"], "\n")
+for model in (m["network"], m["softmax_baseline"], m["majority_rule"]):
+    print(f"{model['name']:<45} accuracy {model['accuracy']:.4f}   "
+          f"balanced accuracy {model['balanced_accuracy']:.4f}")
+print(f"\nthe test split was opened {m['test_read_count']} time(s) in total")
+print("\nper-class recall of the chosen network:")
+for name, value in m["network"]["per_class_recall"].items():
+    print(f"  {name:<22} {value:.3f}")
+===== CELL 63 [markdown] chars=1160 =====
+### 6f. Reading the result honestly
+
+Before writing anything up, answer these to yourself — they are the eight points
+`REVIEW.md` is built on, and the report should not say more than the figures
+support:
+
+* How much better is the network than the softmax baseline, and than the
+  majority-class rule? Is the margin larger than the differences between the
+  network sizes you compared?
+* Do the learning curves actually support the epoch you kept, or is the curve
+  still moving at that point? Is validation turning up while training keeps
+  falling (overfitting)?
+* Which classes are confused, and does the confusion have a biological or a
+  pixel-level explanation?
+* Was anything at all chosen after the test split was opened? The run log prints
+  one line when it happens, and `test_metrics.json` records the count.
+* Did you rerun the whole thing and diff the two `results.csv` files? Record both
+  runtimes and the command.
+* What can this not say about using such a classifier on patients? (One crop per
+  cell, one stain protocol, no calibration, no abstention, correlated samples.)
+
+*Your `REVIEW.md` is your own work — do not have the agent write it.*

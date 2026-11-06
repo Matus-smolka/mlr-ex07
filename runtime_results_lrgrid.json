@@ -1,0 +1,26 @@
+{
+  "seed": 0,
+  "select_only": true,
+  "grids": {
+    "adam": [
+      0.0001,
+      0.0003,
+      0.001,
+      0.003
+    ],
+    "sgd": [
+      0.03,
+      0.05,
+      0.1
+    ]
+  },
+  "total_seconds": 205.94,
+  "per_model_seconds": {
+    "adam-plain": 36.36,
+    "adam-balanced": 37.54,
+    "sgd-plain": 22.15,
+    "sgd-balanced": 22.73
+  },
+  "numpy": "2.3.5",
+  "threads": "8"
+}

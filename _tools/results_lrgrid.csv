@@ -1,0 +1,5 @@
+label,sizes,params,optimizer,eta,sampling,epochs_run,best_epoch,val_accuracy,val_balanced_accuracy,test_accuracy,test_balanced_accuracy
+adam-plain,"[2352, 256, 8]",604424,adam,0.001,plain,30,18,0.8720794392523364,0.8501115451526516,,
+adam-balanced,"[2352, 256, 8]",604424,adam,0.001,balanced,30,20,0.8714953271028038,0.8558783899908007,,
+sgd-plain,"[2352, 256, 8]",604424,sgd,0.05,plain,30,20,0.8808411214953271,0.8616658548494786,,
+sgd-balanced,"[2352, 256, 8]",604424,sgd,0.05,balanced,30,26,0.8738317757009346,0.8544777601543178,,

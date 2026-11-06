@@ -1,0 +1,205 @@
+{
+  "seed": 0,
+  "batch": 256,
+  "standardization": "per pixel-channel, train split only",
+  "selected_on_validation": {
+    "optimizer": "sgd",
+    "sampling": "plain",
+    "sizes": "[2352, 256, 8]",
+    "epochs": 18
+  },
+  "test_read_count": 1,
+  "network": {
+    "name": "the chosen network [2352, 256, 8]",
+    "sizes": "[2352, 256, 8]",
+    "best_epoch_chosen_on_validation": 18,
+    "accuracy": 0.8652440806781643,
+    "balanced_accuracy": 0.8456617016076619,
+    "per_class_recall": {
+      "basophil": 0.7213,
+      "eosinophil": 0.9615,
+      "erythroblast": 0.8521,
+      "immature granulocyte": 0.7617,
+      "lymphocyte": 0.8107,
+      "monocyte": 0.7676,
+      "neutrophil": 0.8904,
+      "platelet": 1.0
+    },
+    "confusion_matrix": [
+      [
+        176,
+        3,
+        0,
+        42,
+        5,
+        16,
+        2,
+        0
+      ],
+      [
+        0,
+        600,
+        0,
+        8,
+        2,
+        1,
+        13,
+        0
+      ],
+      [
+        3,
+        1,
+        265,
+        16,
+        11,
+        4,
+        9,
+        2
+      ],
+      [
+        35,
+        10,
+        10,
+        441,
+        15,
+        39,
+        29,
+        0
+      ],
+      [
+        7,
+        0,
+        14,
+        17,
+        197,
+        1,
+        7,
+        0
+      ],
+      [
+        7,
+        0,
+        1,
+        52,
+        4,
+        218,
+        2,
+        0
+      ],
+      [
+        2,
+        16,
+        8,
+        42,
+        3,
+        1,
+        593,
+        1
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        470
+      ]
+    ]
+  },
+  "softmax_baseline": {
+    "name": "softmax baseline (no hidden layer)",
+    "accuracy": 0.799473838059047,
+    "balanced_accuracy": 0.7738537043943396,
+    "confusion_matrix": [
+      [
+        149,
+        5,
+        1,
+        73,
+        2,
+        11,
+        3,
+        0
+      ],
+      [
+        10,
+        572,
+        2,
+        6,
+        1,
+        6,
+        27,
+        0
+      ],
+      [
+        6,
+        1,
+        267,
+        14,
+        8,
+        2,
+        13,
+        0
+      ],
+      [
+        52,
+        8,
+        8,
+        384,
+        14,
+        82,
+        31,
+        0
+      ],
+      [
+        13,
+        0,
+        30,
+        23,
+        167,
+        5,
+        5,
+        0
+      ],
+      [
+        7,
+        3,
+        4,
+        79,
+        7,
+        182,
+        2,
+        0
+      ],
+      [
+        11,
+        29,
+        22,
+        41,
+        6,
+        4,
+        549,
+        4
+      ],
+      [
+        0,
+        0,
+        2,
+        0,
+        0,
+        0,
+        3,
+        465
+      ]
+    ]
+  },
+  "majority_rule": {
+    "name": "majority class rule (neutrophil)",
+    "accuracy": 0.19467991815258695,
+    "balanced_accuracy": 0.125,
+    "majority_class": "neutrophil"
+  },
+  "n_test": 3421
+}
